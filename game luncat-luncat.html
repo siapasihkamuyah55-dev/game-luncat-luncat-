@@ -1,0 +1,409 @@
+<!-- Created by Nugraha Wahyu Ardyansyah Bastian -->
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Auto Runner</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    touch-action:none;
+}
+
+body{
+    overflow:hidden;
+    background:#87CEEB;
+    font-family:Arial,sans-serif;
+}
+
+canvas{
+    display:block;
+}
+
+#hud{
+    position:fixed;
+    top:10px;
+    left:10px;
+    color:white;
+    font-size:24px;
+    font-weight:bold;
+    text-shadow:2px 2px 4px black;
+}
+
+#jump{
+    position:fixed;
+    right:20px;
+    bottom:20px;
+    width:100px;
+    height:100px;
+    border-radius:50%;
+    border:2px solid white;
+    background:rgba(255,255,255,.3);
+    color:white;
+    font-size:40px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+</style>
+</head>
+
+<body>
+
+<div id="hud">Score: 0</div>
+
+<canvas id="game"></canvas>
+
+<div id="jump">▲</div>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+function resize(){
+    canvas.width=window.innerWidth;
+    canvas.height=window.innerHeight;
+}
+resize();
+window.addEventListener("resize",resize);
+
+const jumpBtn=document.getElementById("jump");
+
+let jumpPressed=false;
+
+jumpBtn.addEventListener("touchstart",e=>{
+    e.preventDefault();
+    jumpPressed=true;
+});
+
+jumpBtn.addEventListener("touchend",e=>{
+    e.preventDefault();
+    jumpPressed=false;
+});
+
+document.addEventListener("keydown",e=>{
+    if(e.code==="Space") jumpPressed=true;
+});
+
+document.addEventListener("keyup",e=>{
+    if(e.code==="Space") jumpPressed=false;
+});
+
+/////////////////////
+//change the things//
+/////////////////////
+const RUN_SPEED=9;
+const GRAVITY=0.9;
+/////////////////////
+//change the things//
+/////////////////////
+
+const player={
+    x:100,
+    y:300,
+    w:40,
+    h:50,
+    vy:0
+};
+
+let grounded=false;
+let cameraX=0;
+let score=0;
+let gameOver=false;
+let worldEnd=1500;
+
+let platforms=[
+    {x:-1000,y:520,w:1800,h:100},
+    {x:850,y:470,w:220,h:20},
+    {x:1150,y:450,w:220,h:20}
+];
+
+let coins=[];
+let enemies=[];
+
+function generateChunk(){
+
+    let last=platforms[platforms.length-1];
+
+    for(let i=0;i<5;i++){
+
+        const width=180+Math.random()*80;
+        const gap=70+Math.random()*50;
+
+        let y=last.y+(Math.random()-0.5)*80;
+
+        y=Math.max(260,Math.min(480,y));
+
+        const x=last.x+last.w+gap;
+
+        const p={
+            x:x,
+            y:y,
+            w:width,
+            h:20
+        };
+
+        platforms.push(p);
+
+        if(Math.random()<0.8){
+
+            coins.push({
+                x:x+width/2,
+                y:y-40,
+                r:10
+            });
+        }
+
+        if(score>500 && Math.random()<0.15){
+
+            enemies.push({
+                x:x+width*0.8,
+                y:y-35,
+                w:35,
+                h:35,
+                dir:1,
+                min:x,
+                max:x+width-35
+            });
+        }
+
+        worldEnd=x+width;
+        last=p;
+    }
+}
+
+generateChunk();
+generateChunk();
+
+function hit(a,b){
+
+    return(
+        a.x<b.x+b.w &&
+        a.x+a.w>b.x &&
+        a.y<b.y+b.h &&
+        a.y+a.h>b.y
+    );
+}
+
+function reset(){
+
+    player.x=100;
+    player.y=300;
+    player.vy=0;
+
+    score=0;
+    gameOver=false;
+
+    platforms=[
+        {x:-1000,y:520,w:1800,h:100},
+        {x:850,y:470,w:220,h:20},
+        {x:1150,y:450,w:220,h:20}
+    ];
+
+    coins=[];
+    enemies=[];
+    worldEnd=1500;
+
+    generateChunk();
+    generateChunk();
+}
+
+function update(){
+
+    if(gameOver) return;
+
+    if(jumpPressed && grounded){
+
+        player.vy=-13;
+        grounded=false;
+    }
+
+    player.x+=RUN_SPEED;
+
+    player.vy+=GRAVITY;
+    player.y+=player.vy;
+
+    grounded=false;
+
+    for(const p of platforms){
+
+        if(
+            player.vy>=0 &&
+            player.x+player.w>p.x &&
+            player.x<p.x+p.w &&
+            player.y+player.h>=p.y &&
+            player.y+player.h-player.vy<=p.y
+        ){
+            player.y=p.y-player.h;
+            player.vy=0;
+            grounded=true;
+        }
+    }
+
+    for(let i=coins.length-1;i>=0;i--){
+
+        const c=coins[i];
+
+        if(
+            Math.hypot(
+                player.x+20-c.x,
+                player.y+25-c.y
+            )<25
+        ){
+            score+=10;
+            coins.splice(i,1);
+        }
+    }
+
+    for(const e of enemies){
+
+        e.x+=e.dir*1.2;
+
+        if(e.x<e.min || e.x>e.max)
+            e.dir*=-1;
+
+        if(hit(player,e))
+            gameOver=true;
+    }
+
+    if(player.y>canvas.height+300)
+        gameOver=true;
+
+    if(player.x+canvas.width>worldEnd-1000)
+        generateChunk();
+
+    score=Math.max(
+        score,
+        Math.floor(player.x/10)
+    );
+
+    cameraX=Math.max(
+        0,
+        player.x-canvas.width/3
+    );
+
+    document.getElementById("hud").textContent=
+        "Score: "+score;
+}
+
+function draw(){
+
+    ctx.clearRect(
+        0,0,
+        canvas.width,
+        canvas.height
+    );
+
+    ctx.save();
+
+    ctx.translate(-cameraX,0);
+
+    ctx.fillStyle="#4CAF50";
+
+    for(const p of platforms){
+
+        ctx.fillRect(
+            p.x,p.y,p.w,p.h
+        );
+    }
+
+    ctx.fillStyle="gold";
+
+    for(const c of coins){
+
+        ctx.beginPath();
+        ctx.arc(c.x,c.y,c.r,0,Math.PI*2);
+        ctx.fill();
+    }
+
+    for(const e of enemies){
+
+        ctx.fillStyle="rgba(255,0,0,0.25)";
+        ctx.fillRect(
+            e.x-200,
+            e.y,
+            e.w+200,
+            e.h
+        );
+
+        ctx.fillStyle="yellow";
+        ctx.fillRect(
+            e.x-150,
+            e.y,
+            30,
+            30
+        );
+
+        ctx.fillStyle="black";
+        ctx.fillText(
+            "!",
+            e.x-142,
+            e.y+22
+        );
+
+        ctx.fillStyle="crimson";
+        ctx.fillRect(
+            e.x,
+            e.y,
+            e.w,
+            e.h
+        );
+    }
+
+    ctx.fillStyle="orange";
+    ctx.fillRect(
+        player.x,
+        player.y,
+        player.w,
+        player.h
+    );
+
+    ctx.restore();
+
+    if(gameOver){
+
+        ctx.fillStyle="rgba(0,0,0,.5)";
+        ctx.fillRect(
+            0,0,
+            canvas.width,
+            canvas.height
+        );
+
+        ctx.fillStyle="white";
+        ctx.textAlign="center";
+
+        ctx.font="bold 48px Arial";
+        ctx.fillText(
+            "YAH KALAH",
+            canvas.width/2,
+            canvas.height/2
+        );
+
+        ctx.font="24px Arial";
+        ctx.fillText(
+            "Tolol Banget Si Lu",
+            canvas.width/2,
+            canvas.height/2+50
+        );
+    }
+}
+
+function loop(){
+
+    update();
+    draw();
+
+    requestAnimationFrame(loop);
+}
+
+loop();
+
+</script>
+</body>
+</html>
